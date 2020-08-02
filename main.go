@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
+	//https://mingrammer.com/translation-go-walkthrough-encoding-package/
+	//https://bitlog.tistory.com/124
 	"fmt"
 	"io"
 	"log"
@@ -22,6 +24,54 @@ type MsgHeader struct {
 	Date    string
 }
 
+type Client struct{
+	conn net.Conn
+	server *Server
+	send chan Msg
+}
+
+type Server struct {
+	clientMap map[*Client]bool
+	ChanEnter chan *Client
+	ChanLeave chan *Client
+}
+
+
+func initServer () *Server {
+	return &Server{
+		clientMap: make(map[*Client]bool),
+	}
+}
+
+func (s *Server) run(l net.Listener){
+	s.ChanEnter = make(chan *Client)
+	s.ChanLeave = make(chan *Client)
+
+	for  {
+		conn, err := l.Accept()
+		if nil != err {
+			log.Println(err)
+			continue
+		}
+		client := Client{
+			conn: conn,
+			server: s,
+			send: make(chan Msg),
+		}
+		s.clientMap[&client] = true
+		defer conn.Close()
+
+		go ConnHandler(client)
+	}
+
+
+}
+
+
+func init() {
+	gob.Register(MsgBody{})
+}
+
 func main(){
 	fmt.Println("chat start")
 	l, err := net.Listen("tcp", ":8000")
@@ -30,30 +80,20 @@ func main(){
 	}
 
 	defer l.Close()
+	server := initServer()
+	go server.run(l)
 
-	for  {
-		conn, err := l.Accept()
-		if nil != err {
-			log.Println(err)
-			continue
-		}
-
-		defer conn.Close()
-		go ConnHandler(conn)
-	}
+	select{}
 }
 
-func init() {
-	gob.Register(MsgBody{})
-}
 
-func ConnHandler(conn net.Conn){
+func ConnHandler(c Client){
 	var codeBuffer bytes.Buffer
 	var dec        *gob.Decoder = gob.NewDecoder(&codeBuffer)
 	recvBuf := make([]byte, 4096)
 
 	for {
-		n, err := conn.Read(recvBuf)
+		n, err := c.conn.Read(recvBuf)
 		if nil != err {
 			if io.EOF == err {
 				log.Println(err)
@@ -75,6 +115,15 @@ func ConnHandler(conn net.Conn){
 			}
 
 			log.Println("msg: ", msg)
+
+			// broadcast
+			for client := range c.server.clientMap {
+				_, err = client.conn.Write(data)
+				if err != nil {
+					log.Println(err)
+					return
+				}
+			}
 		}
 	}
 }

@@ -35,16 +35,30 @@ func RecvServer(conn net.Conn) {
 		}
 	}()
 
-	data := make([]byte, 4096)
+	var codeBuffer bytes.Buffer
+	var dec        *gob.Decoder = gob.NewDecoder(&codeBuffer)
+	recvBuf := make([]byte, 4096)
 
 	for {
-		n, err := conn.Read(data)
+
+		n, err := conn.Read(recvBuf)
 		if err != nil {
 			log.Println("EOF", err)
 			panic("close")
 		}
 
-		log.Println("Server send : " + string(data[:n]))
+		data := recvBuf[:n]
+		codeBuffer.Write(data)
+
+		msg := Msg{}
+
+		if err = dec.Decode(&msg); nil != err {
+			log.Printf("failed to decode message; err: %v", err)
+			continue
+		}
+
+		log.Println("Server send: ", msg)
+
 	}
 }
 
