@@ -9,18 +9,6 @@ import (
 	"net"
 )
 
-//type MsgBody struct {
-//	Content string
-//}
-//
-//type Msg struct {
-//	Header MsgHeader
-//	Body   interface{}
-//}
-//type MsgHeader struct {
-//	MsgType string
-//	Date    string
-//}
 
 type Client struct{
 	conn net.Conn
@@ -59,7 +47,8 @@ func (s *Server) run(l net.Listener){
 		s.clientMap[&client] = true
 		defer conn.Close()
 
-		go ConnHandler(client)
+		go client.ConnHandler()
+		go client.brodcast()
 	}
 
 
@@ -67,7 +56,7 @@ func (s *Server) run(l net.Listener){
 
 
 func init() {
-	//gob.Register(MsgBody{})
+	fmt.Println("init")
 }
 
 func main(){
@@ -85,9 +74,8 @@ func main(){
 }
 
 
-func ConnHandler(c Client){
-	//var codeBuffer bytes.Buffer
-	//var dec        *gob.Decoder = gob.NewDecoder(&codeBuffer)
+func (c *Client)ConnHandler(){
+
 	recvBuf := make([]byte, 4096)
 
 	for {
@@ -102,30 +90,25 @@ func ConnHandler(c Client){
 		}
 
 		if 0 < n {
-			data := recvBuf[:n]
-			//codeBuffer.Write(data)
+			c.send <- recvBuf[:n]
+		}
+	}
+}
 
-			//msg := Msg{}
-			//
-			//if err = dec.Decode(&msg); nil != err {
-			//	log.Printf("failed to decode message; err: %v", err)
-			//	continue
-			//}
 
+func (c *Client) brodcast() {
+	for {
+		select {
+		case data := <- c.send:
 			log.Println("msg: ", string(data))
 
-			// broadcast
 			for client := range c.server.clientMap {
-				//fmt.Println("client", client)
-				//fmt.Println("data", data)
-				//fmt.Println("=====================")
-				_, err = client.conn.Write(data)
+				_, err := client.conn.Write(data)
 				if err != nil {
 					log.Println(err)
-					return
 				}
 			}
-			//codeBuffer.Reset()
+
 		}
 	}
 }
