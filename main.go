@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/gob"
 	//https://mingrammer.com/translation-go-walkthrough-encoding-package/
 	//https://bitlog.tistory.com/124
 	"fmt"
@@ -11,23 +9,23 @@ import (
 	"net"
 )
 
-type MsgBody struct {
-	Content string
-}
-
-type Msg struct {
-	Header MsgHeader
-	Body   interface{}
-}
-type MsgHeader struct {
-	MsgType string
-	Date    string
-}
+//type MsgBody struct {
+//	Content string
+//}
+//
+//type Msg struct {
+//	Header MsgHeader
+//	Body   interface{}
+//}
+//type MsgHeader struct {
+//	MsgType string
+//	Date    string
+//}
 
 type Client struct{
 	conn net.Conn
 	server *Server
-	send chan Msg
+	send chan []byte
 }
 
 type Server struct {
@@ -56,7 +54,7 @@ func (s *Server) run(l net.Listener){
 		client := Client{
 			conn: conn,
 			server: s,
-			send: make(chan Msg),
+			send: make(chan []byte),
 		}
 		s.clientMap[&client] = true
 		defer conn.Close()
@@ -69,7 +67,7 @@ func (s *Server) run(l net.Listener){
 
 
 func init() {
-	gob.Register(MsgBody{})
+	//gob.Register(MsgBody{})
 }
 
 func main(){
@@ -88,8 +86,8 @@ func main(){
 
 
 func ConnHandler(c Client){
-	var codeBuffer bytes.Buffer
-	var dec        *gob.Decoder = gob.NewDecoder(&codeBuffer)
+	//var codeBuffer bytes.Buffer
+	//var dec        *gob.Decoder = gob.NewDecoder(&codeBuffer)
 	recvBuf := make([]byte, 4096)
 
 	for {
@@ -105,25 +103,29 @@ func ConnHandler(c Client){
 
 		if 0 < n {
 			data := recvBuf[:n]
-			codeBuffer.Write(data)
+			//codeBuffer.Write(data)
 
-			msg := Msg{}
+			//msg := Msg{}
+			//
+			//if err = dec.Decode(&msg); nil != err {
+			//	log.Printf("failed to decode message; err: %v", err)
+			//	continue
+			//}
 
-			if err = dec.Decode(&msg); nil != err {
-				log.Printf("failed to decode message; err: %v", err)
-				continue
-			}
-
-			log.Println("msg: ", msg)
+			log.Println("msg: ", string(data))
 
 			// broadcast
 			for client := range c.server.clientMap {
+				//fmt.Println("client", client)
+				//fmt.Println("data", data)
+				//fmt.Println("=====================")
 				_, err = client.conn.Write(data)
 				if err != nil {
 					log.Println(err)
 					return
 				}
 			}
+			//codeBuffer.Reset()
 		}
 	}
 }
