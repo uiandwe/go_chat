@@ -17,7 +17,7 @@ type Client struct{
 }
 
 type Server struct {
-	clientMap map[*Client]bool
+	channelMap map[string]map[*Client]bool
 	ChanEnter chan *Client
 	ChanLeave chan *Client
 }
@@ -25,13 +25,14 @@ type Server struct {
 
 func initServer () *Server {
 	return &Server{
-		clientMap: make(map[*Client]bool),
+		channelMap: make(map[string]map[*Client]bool),
 	}
 }
 
 func (s *Server) run(l net.Listener){
 	s.ChanEnter = make(chan *Client)
 	s.ChanLeave = make(chan *Client)
+	s.channelMap["1"] = make(map[*Client]bool)
 
 	for  {
 		conn, err := l.Accept()
@@ -44,7 +45,7 @@ func (s *Server) run(l net.Listener){
 			server: s,
 			send: make(chan []byte),
 		}
-		s.clientMap[&client] = true
+		s.channelMap["1"][&client] = true
 		defer conn.Close()
 
 		go client.ConnHandler()
@@ -102,7 +103,7 @@ func (c *Client) brodcast() {
 		case data := <- c.send:
 			log.Println("msg: ", string(data))
 
-			for client := range c.server.clientMap {
+			for client := range c.server.channelMap["1"]{
 				_, err := client.conn.Write(data)
 				if err != nil {
 					log.Println(err)
