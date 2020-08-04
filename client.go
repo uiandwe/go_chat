@@ -1,11 +1,16 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 )
 
+type Msg struct {
+	Type string
+	Text string
+}
 
 func init() {
 	fmt.Println("init")
@@ -28,8 +33,10 @@ func RecvServer(conn net.Conn) {
 			panic("close")
 		}
 		data := recvBuf[:n]
+		var m Msg
+		json.Unmarshal([]byte(data), &m)
 
-		log.Println("Server send: ", string(data))
+		log.Println("Server send: ", m)
 	}
 }
 

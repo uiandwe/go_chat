@@ -1,14 +1,17 @@
 package main
 
 import (
-	//https://mingrammer.com/translation-go-walkthrough-encoding-package/
-	//https://bitlog.tistory.com/124
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net"
 )
 
+type Msg struct {
+	Type string
+	Text string
+}
 
 type Client struct{
 	conn net.Conn
@@ -55,26 +58,6 @@ func (s *Server) run(l net.Listener){
 
 }
 
-
-func init() {
-	fmt.Println("init")
-}
-
-func main(){
-	fmt.Println("chat start")
-	l, err := net.Listen("tcp", ":8000")
-	if nil != err {
-		log.Println(err)
-	}
-
-	defer l.Close()
-	server := initServer()
-	go server.run(l)
-
-	select{}
-}
-
-
 func (c *Client)ConnHandler(){
 
 	recvBuf := make([]byte, 4096)
@@ -83,7 +66,9 @@ func (c *Client)ConnHandler(){
 		n, err := c.conn.Read(recvBuf)
 		if nil != err {
 			if io.EOF == err {
-				log.Println(err)
+
+				delete(c.server.channelMap["1"], c)
+				log.Println("client close", err)
 				return
 			}
 			log.Println(err)
@@ -101,10 +86,11 @@ func (c *Client) brodcast() {
 	for {
 		select {
 		case data := <- c.send:
-			log.Println("msg: ", string(data))
-
+			var m = Msg {"text", string(data)}
+			log.Println("msg: ", m)
+			b, _ := json.Marshal(&m)
 			for client := range c.server.channelMap["1"]{
-				_, err := client.conn.Write(data)
+				_, err := client.conn.Write(b)
 				if err != nil {
 					log.Println(err)
 				}
@@ -112,4 +98,23 @@ func (c *Client) brodcast() {
 
 		}
 	}
+}
+
+
+func init() {
+	fmt.Println("init")
+}
+
+func main(){
+	fmt.Println("chat start")
+	l, err := net.Listen("tcp", ":8000")
+	if nil != err {
+		log.Println(err)
+	}
+
+	defer l.Close()
+	server := initServer()
+	go server.run(l)
+
+	select{}
 }
