@@ -26,13 +26,13 @@ type Msg struct {
 type Client struct{
 	conn net.Conn
 	server *Server
-	sendMsg chan []byte
+	sendMsg chan Msg
+	ChanEnter chan string
 }
 
 type Server struct {
 	channelMap map[string]map[*Client]bool
-	ChanEnter chan *Client
-	ChanLeave chan *Client
+	//ChanLeave chan string
 }
 
 
@@ -43,9 +43,8 @@ func initServer () *Server {
 }
 
 func (s *Server) run(l net.Listener){
-	s.ChanEnter = make(chan *Client)
-	s.ChanLeave = make(chan *Client)
-	s.channelMap["1"] = make(map[*Client]bool)
+	//s.ChanEnter = make(chan string)
+	//s.ChanLeave = make(chan string)
 
 	for  {
 		conn, err := l.Accept()
@@ -56,16 +55,32 @@ func (s *Server) run(l net.Listener){
 		client := Client{
 			conn: conn,
 			server: s,
-			sendMsg: make(chan []byte),
+			sendMsg: make(chan Msg),
+			ChanEnter: make(chan string),
 		}
-		s.channelMap["1"][&client] = true
+		//s.channelMap["1"][&client] = true
 		defer conn.Close()
 
 		go client.ConnHandler()
 		go client.brodcast()
+		go client.CreateRoom()
 	}
+}
 
+func (c *Client) CreateRoom() {
+	for {
+		select {
+		case room := <- c.ChanEnter:
+			if v, found := c.server.channelMap[room]; found {
+				fmt.Println("join room : ", room, v)
+			} else {
+				fmt.Println("create room : ", room)
+				c.server.channelMap[room] = make(map[*Client]bool)
+			}
+			c.server.channelMap[room][c] = true
 
+		}
+	}
 }
 
 func (c *Client)ConnHandler(){
@@ -86,7 +101,20 @@ func (c *Client)ConnHandler(){
 		}
 
 		if 0 < n {
-			c.sendMsg <- recvBuf[:n]
+			// 언마샬링
+			//c.sendMsg <- recvBuf[:n]
+			data :=  recvBuf[:n]
+			var msg Msg
+			json.Unmarshal([]byte(data), &msg)
+			log.Println("msg: ", msg)
+
+			// create room or into room
+			if msg.Type == "room" {
+				c.ChanEnter <- msg.Text
+			} else { // message
+				c.sendMsg <- msg
+			}
+
 		}
 	}
 }
@@ -95,14 +123,12 @@ func (c *Client)ConnHandler(){
 func (c *Client) brodcast() {
 	for {
 		select {
-		case data := <- c.sendMsg:
+		case m := <- c.sendMsg:
 
-			var msg Msg
-			json.Unmarshal([]byte(data), &msg)
-			log.Println("msg: ", msg)
+			b, _ := json.Marshal(m)
 
-			for client := range c.server.channelMap[msg.Info.Room.Name]{
-				_, err := client.conn.Write(data)
+			for client := range c.server.channelMap[m.Info.Room.Name]{
+				_, err := client.conn.Write(b)
 				if err != nil {
 					log.Println(err)
 				}
