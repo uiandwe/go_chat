@@ -8,15 +8,25 @@ import (
 	"net"
 )
 
+type ClientInfo struct {
+	Room Room
+	Name string
+}
+
+type Room struct {
+	Name string
+}
+
 type Msg struct {
 	Type string
 	Text string
+	Info ClientInfo
 }
 
 type Client struct{
 	conn net.Conn
 	server *Server
-	send chan []byte
+	sendMsg chan []byte
 }
 
 type Server struct {
@@ -46,7 +56,7 @@ func (s *Server) run(l net.Listener){
 		client := Client{
 			conn: conn,
 			server: s,
-			send: make(chan []byte),
+			sendMsg: make(chan []byte),
 		}
 		s.channelMap["1"][&client] = true
 		defer conn.Close()
@@ -76,7 +86,7 @@ func (c *Client)ConnHandler(){
 		}
 
 		if 0 < n {
-			c.send <- recvBuf[:n]
+			c.sendMsg <- recvBuf[:n]
 		}
 	}
 }
@@ -85,12 +95,14 @@ func (c *Client)ConnHandler(){
 func (c *Client) brodcast() {
 	for {
 		select {
-		case data := <- c.send:
-			var m = Msg {"text", string(data)}
-			log.Println("msg: ", m)
-			b, _ := json.Marshal(&m)
-			for client := range c.server.channelMap["1"]{
-				_, err := client.conn.Write(b)
+		case data := <- c.sendMsg:
+
+			var msg Msg
+			json.Unmarshal([]byte(data), &msg)
+			log.Println("msg: ", msg)
+
+			for client := range c.server.channelMap[msg.Info.Room.Name]{
+				_, err := client.conn.Write(data)
 				if err != nil {
 					log.Println(err)
 				}
