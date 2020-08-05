@@ -7,9 +7,30 @@ import (
 	"net"
 )
 
+
+type MyInfo struct {
+	Room Room
+	Name string
+}
+
+type Room struct {
+	Name string
+}
+
 type Msg struct {
 	Type string
 	Text string
+	Info MyInfo
+}
+
+
+func InClientName() MyInfo {
+	var s string
+	fmt.Print("사용자 이름 입력 : ")
+	fmt.Scanln(&s)
+	var r = Room {}
+	var mi = MyInfo{r, s}
+	return mi
 }
 
 func init() {
@@ -41,7 +62,7 @@ func RecvServer(conn net.Conn) {
 }
 
 
-func SendServerMag(conn net.Conn){
+func SendServerMag(conn net.Conn, mi MyInfo){
 
 	defer func(){
 		if r:= recover(); r != nil {
@@ -51,13 +72,28 @@ func SendServerMag(conn net.Conn){
 
 	for {
 		var s string
-		fmt.Scanln(&s)
-		if s == "exit" {
-			log.Fatalln("exit")
+		var t string
+		// 방 만들기 + 방 입장
+		if mi.Room.Name == "" {
+			t = "room"
+			fmt.Scanln(&s)
+			var room = Room{string(s)}
+			mi.Room = room
+		} else {
+			t = "text"
+			fmt.Scanln(&s)
+
+			if s == "exit" {
+				log.Fatalln("exit")
+			}
 		}
-		conn.Write([]byte(s))
+
+		var m = Msg {t, string(s), mi}
+		b, _ := json.Marshal(m)
+		conn.Write(b)
 	}
 }
+
 
 func main() {
 	conn, err := net.Dial("tcp", ":8000")
@@ -71,8 +107,10 @@ func main() {
 	}()
 
 
+	var mi = InClientName()
+
 	go RecvServer(conn)
-	go SendServerMag(conn)
+	go SendServerMag(conn, mi)
 
 	select{}
 
